@@ -193,7 +193,7 @@ def simulate_ruler(scene, ruler):
     print("Simulating Ruler '%s'" % str(ruler))
 
     all_points = []
-    for x_offset in np.linspace(-0.3, 0.3, 200):
+    for x_offset in np.linspace(-0.3, 0.3, 100):
         scanline_points = simulate_ruler_single(scene, ruler, x_offset)
         if scanline_points is not None:
             all_points.append(scanline_points)
