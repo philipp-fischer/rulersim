@@ -4,10 +4,23 @@ import math
 
 
 class Ruler:
+    """
+    Simulates a ruler device.
+    Specs about the Ruler E1200:
+    - Resolution 1024x512
+    - Camera opening angles HxV = approx. 31 deg x 62 deg
+    - Basline between camera and laser origin = 317.2mm (z offset: laser is 15.2mm higher)
+    - Angle between camera center line and laser sheet = 31 deg
+
+
+    """
     def __init__(self, components):
         self.components = components
-        self.angle_range = (-35, 35)
-        self.num_laser_steps = 100  # sampling along single laser line
+        self.laser_angle_range = (-40, 40)
+        self.camera_horizontal_angle_range = (-31, 31)
+        self.camera_vertical_angle_range = (-31/2, 31/2)  # TODO: is this correct?
+
+        self.num_laser_steps = 1000  # sampling along single laser line
 
     def project_laser_points(self, scene, origin, direction, left, return_only_valid=False):
         from scene.scene import Scene
@@ -19,7 +32,8 @@ class Ruler:
 
         # Create array of laser rays
         for idx in range(self.num_laser_steps):
-            angle = (self.angle_range[1] - self.angle_range[0]) / (self.num_laser_steps - 1) * idx + self.angle_range[0]
+            angle = (self.laser_angle_range[1] - self.laser_angle_range[0]) / (self.num_laser_steps - 1) * idx \
+                    + self.laser_angle_range[0]
             # print(angle)
             vec = left * math.sin(math.radians(angle)) + direction * math.cos(math.radians(angle))
 
@@ -33,6 +47,22 @@ class Ruler:
         else:
             return intersection_points, int_primitives
 
+    def compute_out_of_view_points(self, intersection_points, CamO, CamLeft, CamUp):
+        # Laser scene points relative to camera origin
+        trans_points = intersection_points - CamO
+        # Normalize these vectors to length 1
+        trans_points /= np.linalg.norm(trans_points, axis=1).reshape((-1, 1))
+
+        v_angles = np.rad2deg(np.arccos(np.matmul(trans_points, CamUp))) - 90
+        h_angles = np.rad2deg(np.arccos(np.matmul(trans_points, CamLeft))) - 90
+
+        mask = (h_angles >= self.camera_horizontal_angle_range[0]) & \
+               (h_angles <= self.camera_horizontal_angle_range[1]) & \
+               (v_angles >= self.camera_vertical_angle_range[0]) & \
+               (v_angles <= self.camera_vertical_angle_range[1])
+
+        return ~mask
+
     def simulate_single_scan(self, scene, x_offset):
         offset_vector = np.array([x_offset, 0, 0])
 
@@ -44,7 +74,9 @@ class Ruler:
         line_cam = self.components['Cam'][0]
         CamO = line_cam[0] + offset_vector
         CamD = normalize(line_cam[1] - line_cam[0])
+
         LaserLeft = normalize(np.cross(LaserD, CamO - LaserO))
+        CamUp = normalize(np.cross(CamD, LaserLeft))
 
         # Project laser into scene and get intersection points (and corresponding primitives of intersection)
         laser_points, laser_primitives = self.project_laser_points(scene, LaserO, LaserD, LaserLeft, return_only_valid=True)
@@ -67,10 +99,16 @@ class Ruler:
 
             colors = np.zeros((len(laser_points), 3), dtype=np.uint)
 
-            visible_mask = ~np.isfinite(distances)
+            colors[:, :] = [0, 0, 255]
 
-            colors[visible_mask, :] = [0, 0, 255]
-            colors[~visible_mask, :] = [255, 0, 0]
+            # Mark occluded points as not visible
+            occluded_mask = np.isfinite(distances)
+            colors[occluded_mask, :] = [255, 0, 0]
+
+            # Mark out-of-view points (not in camera field of view)
+            out_of_view_mask = self.compute_out_of_view_points(laser_points, CamO, LaserLeft, CamUp)
+            colors[out_of_view_mask, :] = [200, 50, 200]
+
 
             colors_uint = np.array((colors[:, 0] << 16) | (colors[:, 1] << 8) | (colors[:, 2] << 0), dtype=np.uint32)
             colors_uint.dtype = np.float32

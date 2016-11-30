@@ -53,6 +53,8 @@ class Scene:
         dae = collada.Collada(filename, ignore=[collada.DaeUnsupportedError,
                                                 collada.DaeBrokenRefError])
 
+        global_scale = 25.4
+
         assert (isinstance(dae.scene, ColladaScene))
         name_dict = {}
         self._index_dae_nodes(dae.scene.nodes, name_dict)
@@ -99,7 +101,7 @@ class Scene:
 
                     i = np.array(indices)
                     v = np.array(vertices).reshape((-1, 3))
-                    points = v[i].reshape((-1, 3, 3)) / 20
+                    points = v[i].reshape((-1, 3, 3)) * global_scale
 
                     for tidx in range(points.shape[0]):
                         print("Adding ", points[tidx])
@@ -115,7 +117,7 @@ class Scene:
                         assert (isinstance(first_line, Line))
                         i = np.array(first_line.indices)
                         v = np.array(first_line.vertices).reshape((-1, 3))
-                        points = v[i].reshape((-1, 2, 3)) / 20
+                        points = v[i].reshape((-1, 2, 3)) * global_scale
 
                         print(first_line)
                         print(first_line.vertices)
