@@ -10,7 +10,6 @@ if __name__ == '__main__':
     for ruler_name in scene.rulers:
         all_points = []
         for x_offset in np.linspace(-200, 200, 100):
-        #for x_offset in [0]:
             scanline_points = scene.rulers[ruler_name].simulate_single_scan(scene, x_offset)
             if scanline_points is not None:
                 all_points.append(scanline_points)

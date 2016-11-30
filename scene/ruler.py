@@ -1,6 +1,8 @@
 import numpy as np
 from scene.primitive import normalize
 import math
+import PIL.Image as Image
+import time
 
 
 class Ruler:
@@ -19,6 +21,7 @@ class Ruler:
         self.laser_angle_range = (-40, 40)
         self.camera_horizontal_angle_range = (-31, 31)
         self.camera_vertical_angle_range = (-31/2, 31/2)  # TODO: is this correct?
+        self.camera_resolution = (1024, 512)
 
         self.num_laser_steps = 1000  # sampling along single laser line
 
@@ -47,6 +50,24 @@ class Ruler:
         else:
             return intersection_points, int_primitives
 
+    def create_camera_image(self, h_angles, v_angles, suffix=''):
+        img = np.zeros(self.camera_resolution[::-1], dtype=np.uint8)
+        num_pts = h_angles.shape[0]
+        x_coords = np.round((h_angles - self.camera_horizontal_angle_range[0]) /
+                   (self.camera_horizontal_angle_range[1] - self.camera_horizontal_angle_range[0]) *
+                   (self.camera_resolution[0]-1)).astype(np.int32)
+        y_coords = np.round((v_angles - self.camera_vertical_angle_range[0]) /
+                   (self.camera_vertical_angle_range[1] - self.camera_vertical_angle_range[0]) *
+                   (self.camera_resolution[1]-1)).astype(np.int32)
+
+        for idx in range(num_pts):
+            if x_coords[idx] > img.shape[1] or y_coords[idx] > img.shape[0]:
+                print(y_coords[idx], x_coords[idx])
+            else:
+                img[y_coords[idx], x_coords[idx]] = 255
+
+        Image.fromarray(img).save('camera%s.png' % suffix)
+
     def compute_out_of_view_points(self, intersection_points, CamO, CamLeft, CamUp):
         # Laser scene points relative to camera origin
         trans_points = intersection_points - CamO
@@ -60,6 +81,8 @@ class Ruler:
                (h_angles <= self.camera_horizontal_angle_range[1]) & \
                (v_angles >= self.camera_vertical_angle_range[0]) & \
                (v_angles <= self.camera_vertical_angle_range[1])
+
+        self.create_camera_image(h_angles[mask], v_angles[mask], suffix="%08d" % int(time.clock()*1000))
 
         return ~mask
 
@@ -101,6 +124,11 @@ class Ruler:
 
             colors[:, :] = [0, 0, 255]
 
+            # TODO:
+            # First compute h_angles and v_angles in camera
+            # Then do the occlusion and visibility things
+            # Then write out a colored (and named) camera image using the computed flags
+
             # Mark occluded points as not visible
             occluded_mask = np.isfinite(distances)
             colors[occluded_mask, :] = [255, 0, 0]
@@ -108,7 +136,6 @@ class Ruler:
             # Mark out-of-view points (not in camera field of view)
             out_of_view_mask = self.compute_out_of_view_points(laser_points, CamO, LaserLeft, CamUp)
             colors[out_of_view_mask, :] = [200, 50, 200]
-
 
             colors_uint = np.array((colors[:, 0] << 16) | (colors[:, 1] << 8) | (colors[:, 2] << 0), dtype=np.uint32)
             colors_uint.dtype = np.float32
