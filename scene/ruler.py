@@ -3,6 +3,7 @@ from scene.primitive import normalize
 import math
 import PIL.Image as Image
 import time
+import os
 
 
 class Ruler:
@@ -50,7 +51,7 @@ class Ruler:
         else:
             return intersection_points, int_primitives
 
-    def create_camera_image(self, h_angles, v_angles, mask_out_of_view, mask_occluded, suffix=''):
+    def create_camera_image(self, h_angles, v_angles, mask_out_of_view, mask_occluded, filename):
         # Can only display in-view points.
         # Color the occluded points red
 
@@ -80,7 +81,7 @@ class Ruler:
             else:
                 img[y_inview[idx], x_inview[idx]] = [255, 255, 255]
 
-        Image.fromarray(img).save('camera%s.png' % suffix)
+        Image.fromarray(img).save(filename)
 
     def compute_point_angles(self, intersection_points, CamO, CamLeft, CamUp):
         # Laser scene points relative to camera origin
@@ -101,7 +102,7 @@ class Ruler:
 
         return ~mask
 
-    def simulate_single_scan(self, scene, x_offset, ruler_name):
+    def simulate_single_scan(self, scene, x_offset, ruler_name, output_folder):
         offset_vector = np.array([x_offset, 0, 0])
 
         line_laser = self.components['Laser'][0]  # TODO: Can be multiple lasers
@@ -153,12 +154,12 @@ class Ruler:
             out_of_view_mask = self.compute_out_of_view_points(h_angles, v_angles)
 
             # Create and store a camera image
-            self.create_camera_image(h_angles, v_angles, mask_out_of_view, mask_occluded,
-                                     suffix="_%s_%08d" % (ruler_name, int(time.clock() * 1000)))
+            camera_filename = os.path.join(output_folder, "camera_%s_%08d.png" % (ruler_name, int(time.clock() * 1000)))
+            self.create_camera_image(h_angles, v_angles, mask_out_of_view, mask_occluded, camera_filename)
 
             # Create the point cloud
             colors[mask_occluded, :] = [255, 0, 0]
-            colors[out_of_view_mask, :] = [200, 50, 200]
+            # colors[out_of_view_mask, :] = [200, 50, 200]
 
             colors_uint = np.array((colors[:, 0] << 16) | (colors[:, 1] << 8) | (colors[:, 2] << 0), dtype=np.uint32)
             colors_uint.dtype = np.float32
